@@ -44,3 +44,11 @@ wheels/
 /datasets
 /projects/*/datasets
 /models
+
+# some shell script
+predict.sh
+test.sh
+train.sh
+
+# ignore downloaded weights
+/weights
