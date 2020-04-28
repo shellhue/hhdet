@@ -1,0 +1,10 @@
+_BASE_: "../Base-RetinaNet.yaml"
+MODEL:
+  MOBILENETV2:
+    WIDTH_MULT: 1.0
+    PRETRAINED: True
+    OUT_FEATURES: ["s3", "s4", "s5"]
+  BACKBONE:
+    NAME: "build_retinanet_mobilenetv2_fpn_backbone"
+  FPN:
+    IN_FEATURES: ["s3", "s4", "s5"]

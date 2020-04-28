@@ -401,6 +401,18 @@ _C.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = 0.5
 
 
 # ---------------------------------------------------------------------------- #
+# MobileNetv2 options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.MOBILENETV2 = CN()
+# Whether load pretrained weights for mobilenetv2
+_C.MODEL.MOBILENETV2.PRETRAINED = True
+# Width multiplier to scale mobilenetv2
+_C.MODEL.MOBILENETV2.WIDTH_MULT = 1.0
+# output features
+_C.MODEL.MOBILENETV2.OUT_FEATURES = ["s5"]
+
+
+# ---------------------------------------------------------------------------- #
 # RetinaNet Head
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RETINANET = CN()

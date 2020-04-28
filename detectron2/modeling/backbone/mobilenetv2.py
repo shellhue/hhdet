@@ -6,6 +6,7 @@ try:
     from torch.hub import load_state_dict_from_url
 except ImportError:
     from torch.utils.model_zoo import load_url as load_state_dict_from_url
+import logging
 
 __all__ = ['MobileNetV2', 'mobilenet_v2']
 
@@ -13,6 +14,7 @@ __all__ = ['MobileNetV2', 'mobilenet_v2']
 model_urls = {
     'mobilenet_v2': 'https://download.pytorch.org/models/mobilenet_v2-b0353104.pth',
 }
+
 
 
 def _make_divisible(v, divisor, min_value=None):
@@ -210,15 +212,15 @@ class MobileNetV2(Backbone):
         # (this one) needs to have a name other than `forward` that can be accessed in a subclass
         output = {}
         x = self.stage1(x)
-        output["stage1"] = x
+        output["s1"] = x
         x = self.stage2(x)
-        output["stage2"] = x
+        output["s2"] = x
         x = self.stage3(x)
-        output["stage3"] = x
+        output["s3"] = x
         x = self.stage4(x)
-        output["stage4"] = x
+        output["s4"] = x
         x = self.stage5(x)
-        output["stage5"] = x
+        output["s5"] = x
 
         if "avg" in self._out_features:
             x = nn.functional.adaptive_avg_pool2d(x, 1).reshape(x.shape[0], -1)
@@ -276,17 +278,26 @@ def mobilenet_v2(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
+    logger = logging.getLogger(__name__)
     model = MobileNetV2(**kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls['mobilenet_v2'],
-                                              progress=progress)
-        state_dict = convert_state_dict(state_dict)
-        model.load_state_dict(state_dict)
+    if not pretrained or ("width_mult" in kwargs and kwargs["width_mult"] != 1.0):
+        logger.info("backbone is initialized from scratch.")
+        return model
+    
+    state_dict = load_state_dict_from_url(model_urls['mobilenet_v2'],
+                                            progress=progress)
+    state_dict = convert_state_dict(state_dict)
+    model.load_state_dict(state_dict,strict=False)
+    logger.info("backbone pretrained weights loaded.")
     return model
+
 
 
 @BACKBONE_REGISTRY.register()
 def build_mobilenetv2_backbone(cfg, input_shape):
-    model = mobilenet_v2(pretrained=True)
+    model = mobilenet_v2(
+        pretrained=cfg.MODEL.MOBILENETV2.PRETRAINED, 
+        width_mult=cfg.MODEL.MOBILENETV2.WIDTH_MULT,
+        out_features=cfg.MODEL.MOBILENETV2.OUT_FEATURES)
 
     return model
