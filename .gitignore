@@ -52,3 +52,6 @@ train.sh
 
 # ignore downloaded weights
 /weights
+
+# ignore backbone projects which is just used to investigate backbone temporarily.
+/projects/Backbone
