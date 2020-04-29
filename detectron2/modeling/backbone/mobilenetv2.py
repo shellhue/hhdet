@@ -222,13 +222,11 @@ class MobileNetV2(Backbone):
         x = self.stage5(x)
         output["s5"] = x
 
-        if "avg" in self._out_features:
+        if "avg" in self._out_features or "linear" in self._out_features:
             x = nn.functional.adaptive_avg_pool2d(x, 1).reshape(x.shape[0], -1)
             output["avg"] = x
         if "linear" in self._out_features:
             # Cannot use "squeeze" as batch-size can be 1 => must use reshape with x.shape[0]
-            if "avg" not in self._out_features:
-                x = nn.functional.adaptive_avg_pool2d(x, 1).reshape(x.shape[0], -1)
             x = self.classifier(x)
             output["linear"] = x
 

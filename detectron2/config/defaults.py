@@ -411,6 +411,20 @@ _C.MODEL.MOBILENETV2.WIDTH_MULT = 1.0
 # output features
 _C.MODEL.MOBILENETV2.OUT_FEATURES = ["s5"]
 
+# ---------------------------------------------------------------------------- #
+# Darknet53 options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.DARKNET53 = CN()
+# Whether load pretrained weights
+_C.MODEL.DARKNET53.PRETRAINED = True
+# output features
+_C.MODEL.DARKNET53.OUT_FEATURES = ["s5"]
+# number of classes
+_C.MODEL.DARKNET53.NUM_CLASSES = 1000
+# norm type
+_C.MODEL.DARKNET53.NORM = "BN"
+# the out channels for stem of darknet53
+_C.MODEL.DARKNET53.STEM_OUT_CHANNELS = 32
 
 # ---------------------------------------------------------------------------- #
 # RetinaNet Head
