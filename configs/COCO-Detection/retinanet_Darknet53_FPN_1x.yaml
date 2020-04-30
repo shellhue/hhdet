@@ -1,7 +1,7 @@
 _BASE_: "../Base-RetinaNet.yaml"
 MODEL:
   DARKNET53:
-    PRETRAINED_WEIGHTS: weights/darknet53.weights
+    PRETRAINED_WEIGHTS: weights/darknet53.conv.74
     OUT_FEATURES: ["s3", "s4", "s5"]
   BACKBONE:
     NAME: "build_retinanet_darknet53_fpn_backbone"
