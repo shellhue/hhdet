@@ -415,8 +415,8 @@ _C.MODEL.MOBILENETV2.OUT_FEATURES = ["s5"]
 # Darknet53 options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.DARKNET53 = CN()
-# Whether load pretrained weights
-_C.MODEL.DARKNET53.PRETRAINED = True
+# file path of pretrained weights
+_C.MODEL.DARKNET53.PRETRAINED_WEIGHTS = ""
 # output features
 _C.MODEL.DARKNET53.OUT_FEATURES = ["s5"]
 # number of classes

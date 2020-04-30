@@ -6,7 +6,7 @@ try:
     from torch.hub import load_state_dict_from_url
 except ImportError:
     from torch.utils.model_zoo import load_url as load_state_dict_from_url
-import logging
+import logging 
 
 __all__ = ['MobileNetV2', 'mobilenet_v2']
 
@@ -279,14 +279,14 @@ def mobilenet_v2(pretrained=False, progress=True, **kwargs):
     logger = logging.getLogger(__name__)
     model = MobileNetV2(**kwargs)
     if not pretrained or ("width_mult" in kwargs and kwargs["width_mult"] != 1.0):
-        logger.info("backbone is initialized from scratch.")
+        logger.info("Backbone is initialized from scratch.")
         return model
     
     state_dict = load_state_dict_from_url(model_urls['mobilenet_v2'],
                                             progress=progress)
     state_dict = convert_state_dict(state_dict)
-    model.load_state_dict(state_dict,strict=False)
-    logger.info("backbone pretrained weights loaded.")
+    model.load_state_dict(state_dict, strict=False)
+    logger.info("Backbone pretrained weights loaded.")
     return model
 
 
