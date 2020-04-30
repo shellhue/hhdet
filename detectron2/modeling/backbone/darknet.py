@@ -289,7 +289,7 @@ def load_darknet_weights(weights, modules):
     logger.info("Param count in darknet53: {}".format(param_count))
     for ms in paired_modules:
         # When loading weights from darknet53.conv.74, some parameters in model are not missing.
-        if ptr <= param_count:
+        if weights.shape[0] <= ptr:
             break
         if isinstance(ms[0], nn.Conv2d):
             conv = ms[0]
