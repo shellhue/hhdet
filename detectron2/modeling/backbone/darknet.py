@@ -254,9 +254,6 @@ class Darknet(Backbone):
                     block.freeze()
 
 def load_darknet_weights(weights, modules):
-    # for m in modules:
-    #     print(m)
-    # assert False
     logger = logging.getLogger(__name__)
     logger.info("Starting to convert darknet53 pretrained weights from file: {}".format(weights))
     with open(weights, 'rb') as f:

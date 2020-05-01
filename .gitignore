@@ -55,3 +55,4 @@ train.sh
 
 # ignore backbone projects which is just used to investigate backbone temporarily.
 /projects/Backbone
+/projects/Yolov3_temp
