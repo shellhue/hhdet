@@ -396,7 +396,8 @@ def build_darknet53_backbone(cfg, input_shape):
         load_darknet_weights(pretrained_weights, modules)
         logger.info("Backbone pretrained weights loaded.")
     elif pretrained_weights.endswith(".pth") or pretrained_weights.endswith(".pt"):
-        pretrained_state_dict = torch.load(pretrained_weights)
+        # If map location is on cuda, unecessary extra cuda memory is needed. so map location is best on cpu.
+        pretrained_state_dict = torch.load(pretrained_weights, map_location=torch.device('cpu'))
         if "model" in pretrained_state_dict:
             pretrained_state_dict = pretrained_state_dict["model"]
         n_pretrained_state_dict = {}
@@ -406,11 +407,9 @@ def build_darknet53_backbone(cfg, input_shape):
                 n_pretrained_state_dict[k[len(prefix):]] = v
             else:
                 n_pretrained_state_dict[k] = v
-        # print("=========")
-        # print(model.state_dict().keys())
-        # assert False
-        model.load_state_dict(n_pretrained_state_dict, strict=True)
-        logger.info("Backbone pretrained weights loaded.")
+        # TODO: False strict makes some loading error silent, it is not good.
+        model.load_state_dict(n_pretrained_state_dict, strict=False)
+        logger.info("Backbone pretrained weights loaded from {}.".format(pretrained_weights))
     elif pretrained_weights.endswith(".conv.74"):
         load_darknet_weights(pretrained_weights, modules)
         logger.info("Backbone pretrained weights loaded.")

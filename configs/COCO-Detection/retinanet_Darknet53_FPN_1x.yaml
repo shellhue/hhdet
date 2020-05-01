@@ -1,5 +1,7 @@
 _BASE_: "../Base-RetinaNet.yaml"
 MODEL:
+  PIXEL_MEAN: [0.0, 0.0, 0.0]
+  PIXEL_STD: [1.0, 1.0, 1.0]
   DARKNET53:
     PRETRAINED_WEIGHTS: weights/darknet53.conv.74
     OUT_FEATURES: ["s3", "s4", "s5"]
