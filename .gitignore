@@ -49,10 +49,11 @@ wheels/
 predict.sh
 test.sh
 train.sh
-
+ckpt_process.sh
 # ignore downloaded weights
 /weights
 
 # ignore backbone projects which is just used to investigate backbone temporarily.
 /projects/Backbone
 /projects/Yolov3_temp
+/projects/ultralytics_yolo

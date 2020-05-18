@@ -44,7 +44,7 @@ class Conv2dBNLeakyReLU(CNNBlockBase):
         self.bn1 = get_norm(norm, out_channels)
 
         # parameter init
-        weight_init.c2_msra_fill(self.conv1)
+        weight_init.c2_xavier_fill(self.conv1)
 
     def forward(self, x):
         x = self.conv1(x)

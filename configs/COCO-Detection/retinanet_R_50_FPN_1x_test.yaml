@@ -1,0 +1,8 @@
+_BASE_: "../Base-RetinaNet.yaml"
+
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  BACKBONE:
+    NAME: "build_retinanet_resnet_fpn_backbone_test"
+  RESNETS:
+    DEPTH: 50
