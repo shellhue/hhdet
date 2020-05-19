@@ -28,9 +28,27 @@ class Yolov3FPG(nn.Module):
     def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False):
         """
         Args:
-            norm (str or callable): a callable that takes the number of
-                channels and return a `nn.Module`, or a pre-defined string
-                (one of {"FrozenBN", "BN", "GN"}).
+            in_channels (list[int]): number of channels in the input feature maps.
+            out_channels (list[int]): number of channels in the output feature maps.
+            in_strides (list[int]): number of strides in the input feature maps.
+            in_features (list[str]): names of the input feature maps coming
+                from the backbone to which FPN is attached. For example, if the
+                backbone produces ["res2", "res3", "res4"], any *contiguous* sublist
+                of these may be used; order must be from high to low resolution.
+            out_features (list[str]): names of the output feature maps 
+                corresponding to the in_features. For example, in_features is ["s3", "s4", "s5"], the corresponding output features is ["p3", "p4", "p5"]. Extra output features maybe produced by top block.
+            top_block (nn.Module or None): if provided, an extra operation will
+                be performed on the output of the last (smallest resolution)
+                FPN output, and the result will extend the result list. The top_block
+                further downsamples the feature map. It must have an attribute
+                "num_levels", meaning the number of extra FPN levels added by
+                this block, and "in_feature", which is a string representing
+                its input feature (e.g., p5).
+            norm (str): the normalization to use.
+            fuse_type (str): types for fusing the top down features and the lateral
+                ones. It can be "sum" (default), which sums up element-wise; or "avg",
+                which takes the element-wise mean of the two.
+            naive (bool): whether top feature is used to generate output feature in each stage.
         """
         super().__init__()
 
@@ -42,22 +60,21 @@ class Yolov3FPG(nn.Module):
         top_convs = []
         lateral_convs = []
         output_convs = []
+        norm="BN"
 
-        use_bias = norm == ""
         for idx, (in_channel, out_channel) in enumerate(zip(in_channels, out_channels)):
-            top_out_channel = in_channel / 2
-            lateral_out_channel = in_channel / 2
+            top_out_channel = in_channel // 2
+            lateral_out_channel = in_channel // 2
             up_sampling = (idx < len(in_features) - 1) and not naive
             first_in_channel = in_channel
-            top = None
+            top_conv = None
             if up_sampling:
-                top = nn.Sequential(
-                    Conv2dBNLeakyReLU(in_channel, top_out_channel,
-                                    kernel_size=1, stride=1, padding=0, norm=norm),
+                top_conv = nn.Sequential(
+                    Conv2dBNLeakyReLU(in_channel, top_out_channel, kernel_size=1, stride=1, padding=0, norm=norm),
                     nn.UpsamplingNearest2d(scale_factor=2)
                 )
                 first_in_channel = in_channel + top_out_channel
-            lateral = nn.Sequential(
+            lateral_conv = nn.Sequential(
                 Conv2dBNLeakyReLU(first_in_channel, lateral_out_channel,
                                 kernel_size=1, stride=1, padding=0, norm=norm),
                 Conv2dBNLeakyReLU(lateral_out_channel, lateral_out_channel * 2,
@@ -69,14 +86,14 @@ class Yolov3FPG(nn.Module):
                 Conv2dBNLeakyReLU(lateral_out_channel * 2, lateral_out_channel,
                                 kernel_size=1, stride=1, padding=0, norm=norm),
             )
-            output = Conv2dBNLeakyReLU(lateral_out_channel, out_channel,
+            output_conv = Conv2dBNLeakyReLU(lateral_out_channel, out_channel,
                                             kernel_size=3, stride=1, padding=1, norm=norm)
             stage = int(math.log2(in_strides[idx]))
             if up_sampling:
-                self.add_module("fpn_top{}".format(stage), top)
-                top_convs.append(self.top)
-            self.add_module("fpn_lateral{}".format(stage), lateral)
-            self.add_module("fpn_output{}".format(stage), output)
+                self.add_module("fpn_top{}".format(stage), top_conv)
+                top_convs.append(top_conv)
+            self.add_module("fpn_lateral{}".format(stage), lateral_conv)
+            self.add_module("fpn_output{}".format(stage), output_conv)
 
             lateral_convs.append(lateral_conv)
             output_convs.append(output_conv)
@@ -120,12 +137,6 @@ class Yolov3FPG(nn.Module):
 
 class RetinaFPG(nn.Module):
     def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False):
-        """
-        Args:
-            norm (str or callable): a callable that takes the number of
-                channels and return a `nn.Module`, or a pre-defined string
-                (one of {"FrozenBN", "BN", "GN"}).
-        """
         super().__init__()
 
         assert len(in_features) == len(in_channels) and len(in_features) == len(in_strides) and len(in_features) > 0, "Info of input features should be valid and consistent."

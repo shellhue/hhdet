@@ -402,7 +402,7 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
     out_feature_channels = {k: out_channels for k in out_features}
     out_channels = [out_channels] * len(out_features)
 
-    fpn_feature_gen = RetinaFPG(in_channels,
+    fpn_feature_gen = Yolov3FPG(in_channels,
                                 out_channels,
                                 in_strides,
                                 in_features,
@@ -410,7 +410,7 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
                                 top_block=top_block,
                                 norm=cfg.MODEL.FPN.NORM,
                                 fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
-                                naive=True)
+                                naive=False)
     backbone = FPN_(
         bottom_up=bottom_up,
         in_strides=in_strides,
