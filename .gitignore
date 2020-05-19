@@ -50,6 +50,7 @@ predict.sh
 test.sh
 train.sh
 ckpt_process.sh
+
 # ignore downloaded weights
 /weights
 
@@ -57,3 +58,4 @@ ckpt_process.sh
 /projects/Backbone
 /projects/Yolov3_temp
 /projects/ultralytics_yolo
+/projects/ultralytics_yolo_tmp
