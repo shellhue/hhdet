@@ -143,33 +143,33 @@ class ASFF(nn.Module):
             Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
         ]
 
-        self.add_module("h2h_resize", res_h_convs[0])
-        self.add_module("h2m_resize", res_h_convs[1])
-        self.add_module("h2l_resize", res_h_convs[2])
-        self.add_module("m2h_resize", res_m_convs[0])
-        self.add_module("m2m_resize", res_m_convs[1])
-        self.add_module("m2l_resize", res_m_convs[2])
-        self.add_module("l2h_resize", res_l_convs[0])
-        self.add_module("l2m_resize", res_l_convs[1])
-        self.add_module("l2l_resize", res_l_convs[2])
+        self.add_module("h2h_resize", self.res_h_convs[0])
+        self.add_module("h2m_resize", self.res_h_convs[1])
+        self.add_module("h2l_resize", self.res_h_convs[2])
+        self.add_module("m2h_resize", self.res_m_convs[0])
+        self.add_module("m2m_resize", self.res_m_convs[1])
+        self.add_module("m2l_resize", self.res_m_convs[2])
+        self.add_module("l2h_resize", self.res_l_convs[0])
+        self.add_module("l2m_resize", self.res_l_convs[1])
+        self.add_module("l2l_resize", self.res_l_convs[2])
 
-        self.add_module("h_output", output_convs[0])
-        self.add_module("m_output", output_convs[1])
-        self.add_module("l_output", output_convs[2])
+        self.add_module("h_output", self.output_convs[0])
+        self.add_module("m_output", self.output_convs[1])
+        self.add_module("l_output", self.output_convs[2])
 
-        self.add_module("h2h_weights", weights_h_convs[0])
-        self.add_module("h2m_weights", weights_h_convs[1])
-        self.add_module("h2l_weights", weights_h_convs[2])
-        self.add_module("m2h_weights", weights_m_convs[0])
-        self.add_module("m2m_weights", weights_m_convs[1])
-        self.add_module("m2l_weights", weights_m_convs[2])
-        self.add_module("l2h_weights", weights_l_convs[0])
-        self.add_module("l2m_weights", weights_l_convs[1])
-        self.add_module("l2l_weights", weights_l_convs[2])
+        self.add_module("h2h_weights", self.weights_h_convs[0])
+        self.add_module("h2m_weights", self.weights_h_convs[1])
+        self.add_module("h2l_weights", self.weights_h_convs[2])
+        self.add_module("m2h_weights", self.weights_m_convs[0])
+        self.add_module("m2m_weights", self.weights_m_convs[1])
+        self.add_module("m2l_weights", self.weights_m_convs[2])
+        self.add_module("l2h_weights", self.weights_l_convs[0])
+        self.add_module("l2m_weights", self.weights_l_convs[1])
+        self.add_module("l2l_weights", self.weights_l_convs[2])
 
-        self.add_module("h_weights", weights_compress[0])
-        self.add_module("m_weights", weights_compress[1])
-        self.add_module("l_weights", weights_compress[2])
+        self.add_module("h_weights", self.weights_compress[0])
+        self.add_module("m_weights", self.weights_compress[1])
+        self.add_module("l_weights", self.weights_compress[2])
 
     def forward(self, x_h, x_m, x_l):
         results = []
@@ -187,7 +187,7 @@ class ASFF(nn.Module):
             x_weights = F.softmax(x_weights, dim=1)
 
             fused = x_h_resized * x_weights[:,0:1,:,:]+ x_m_resized * x_weights[:,1:2,:,:] + x_l_resized * x_weights[:,2:,:,:]
-            x_out = self.output_convs(fused)
+            x_out = self.output_convs[i](fused)
             results.append(x_out)
 
         return results
@@ -235,7 +235,7 @@ class Yolov3FPG(nn.Module):
         self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
         self.panetff_enabled = panetff
         if self.asff_enabled:
-            self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm=norm)
+            self.asff = ASFF(in_channels=out_channels[:3:], out_channels=out_channels[:3:], norm=norm)
         if self.panetff_enabled:
             self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         top_convs = []
@@ -315,7 +315,7 @@ class Yolov3FPG(nn.Module):
         if self.panetff_enabled:
             results = self.panetff(results)
         if self.asff_enabled:
-            results[:4:] = self.asff(results[0], results[1], results[2])
+            results[:3:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
 
@@ -330,7 +330,8 @@ class RetinaFPG(nn.Module):
         # whether use asff module
         self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
         if self.asff_enabled:
-            self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm="BN")
+            self.asff = ASFF(in_channels=out_channels[:3:], out_channels=out_channels[:3:], norm="BN")
+        self.panetff_enabled = panetff
         if self.panetff_enabled:
             self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         lateral_convs = []
@@ -399,6 +400,6 @@ class RetinaFPG(nn.Module):
         if self.panetff_enabled:
             results = self.panetff(results)
         if self.asff_enabled:
-            results[:4:] = self.asff(results[0], results[1], results[2])
+            results[:3:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
