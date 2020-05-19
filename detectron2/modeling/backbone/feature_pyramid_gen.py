@@ -8,6 +8,8 @@ import math
 
 from detectron2.modeling.backbone.darknet import Conv2dBNLeakyReLU
 
+from .asff import ASFF
+
 from detectron2.layers import (
     Conv2d,
     FrozenBatchNorm2d,
@@ -24,8 +26,176 @@ __all__ = [
     "RetinaFPG", 
     ]
 
+class PANetFF(nn.Module):
+    """
+    Feature fusion from bottom up direction used in PANet(https://arxiv.org/abs/1803.01534)
+    """
+    def __init__(self, in_channels=[256, 256, 256], out_channels=[256, 256, 256], norm="BN"):
+        super(ASFF, self).__init__()
+        assert len(in_channels) == len(out_channels)
+        assert in_channels[0] == out_channels[0]
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        relu = nn.ReLU(inplace=True)
+
+        bottom_up_convs = []
+        output_convs = []
+
+        for i in range(1, len(in_channels)):
+            bp_conv = Conv2d(out_channels[i-1], in_channels[i], kernel_size=3, stride=2, padding=1, norm=get_norm(norm, in_channels[i]), activation=relu)
+            o_conv = Conv2d(in_channels[i], out_channels[i], kernel_size=3, stride=1, padding=1, norm=get_norm(norm, out_channels[i]), activation=relu)
+
+            self.add_module("bottom_up_conv{}".format(i-1), bp_conv)
+            self.add_module("output_conv{}".format(i), o_conv)
+            bottom_up_convs.append(bp_conv)
+            output_convs.append(o_conv)
+
+    def forward(self, x):
+        assert len(x) == len(in_channels)
+        results = [x[0]]
+        output_feature = x[0]
+        for i in range(1, len(x)):
+            prev_features = bottom_up_convs[i-1](output_feature)
+            fused = prev_features + x[i]
+            output_feature = output_convs[i-1](fused)
+            results.append(output_feature)
+        return results
+
+class ASFF(nn.Module):
+    """
+    Adaptive spatial feature fusion in https://arxiv.org/abs/1911.09516.
+    """
+    def __init__(self, in_channels=[256, 256, 256], out_channels=[256, 256, 256], norm="BN"):
+        super(ASFF, self).__init__()
+        assert len(in_channels) == 3 and len(out_channels) == 3
+
+        h_in_channel = in_channels[0]
+        m_in_channel = in_channels[1]
+        l_in_channel = in_channels[2]
+
+        h_out_channel = out_channels[0]
+        m_out_channel = out_channels[1]
+        l_out_channel = out_channels[2]
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        relu = nn.ReLU(inplace=True)
+        
+        self.res_l_convs = [
+            nn.Sequential(
+                Conv2d(l_in_channel, h_in_channel, kernel_size=1, norm=get_norm(norm, h_in_channel), activation=relu),
+                nn.UpsamplingNearest2d(scale_factor=4),
+            ),
+            nn.Sequential(
+                Conv2d(l_in_channel, m_in_channel, kernel_size=1, norm=get_norm(norm, m_in_channel), activation=relu),
+                nn.UpsamplingNearest2d(scale_factor=2),
+            ),
+            nn.Identity(),
+        ]
+
+        self.res_m_convs = [
+            nn.Sequential(
+                Conv2d(m_in_channel, h_in_channel, kernel_size=1, norm=get_norm(norm, h_in_channel), activation=relu),
+                nn.UpsamplingNearest2d(scale_factor=2),
+            ),
+            nn.Identity(),
+            Conv2d(m_in_channel, l_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, l_in_channel), activation=relu),
+        ]
+
+        self.res_h_convs = [
+            nn.Identity(),
+            Conv2d(h_in_channel, m_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, m_in_channel), activation=relu),
+            nn.Sequential(
+                nn.MaxPool2d(3, stride=2, padding=1),
+                Conv2d(h_in_channel, l_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, l_in_channel), activation=relu),
+            )
+        ]
+
+        self.output_convs = [
+            Conv2d(h_in_channel, h_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, h_out_channel), activation=relu),
+            Conv2d(m_in_channel, m_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, m_out_channel), activation=relu),
+            Conv2d(l_in_channel, l_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, l_out_channel), activation=relu),
+        ]
+
+        compress_c = 8
+
+        self.weights_h_convs = [
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+        ]
+        self.weights_m_convs = [
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+        ]
+
+        self.weights_l_convs = [
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+        ]
+
+        self.weights_compress = [
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
+        ]
+
+        self.add_module("h2h_resize", res_h_convs[0])
+        self.add_module("h2m_resize", res_h_convs[1])
+        self.add_module("h2l_resize", res_h_convs[2])
+        self.add_module("m2h_resize", res_m_convs[0])
+        self.add_module("m2m_resize", res_m_convs[1])
+        self.add_module("m2l_resize", res_m_convs[2])
+        self.add_module("l2h_resize", res_l_convs[0])
+        self.add_module("l2m_resize", res_l_convs[1])
+        self.add_module("l2l_resize", res_l_convs[2])
+
+        self.add_module("h_output", output_convs[0])
+        self.add_module("m_output", output_convs[1])
+        self.add_module("l_output", output_convs[2])
+
+        self.add_module("h2h_weights", weights_h_convs[0])
+        self.add_module("h2m_weights", weights_h_convs[1])
+        self.add_module("h2l_weights", weights_h_convs[2])
+        self.add_module("m2h_weights", weights_m_convs[0])
+        self.add_module("m2m_weights", weights_m_convs[1])
+        self.add_module("m2l_weights", weights_m_convs[2])
+        self.add_module("l2h_weights", weights_l_convs[0])
+        self.add_module("l2m_weights", weights_l_convs[1])
+        self.add_module("l2l_weights", weights_l_convs[2])
+
+        self.add_module("h_weights", weights_compress[0])
+        self.add_module("m_weights", weights_compress[1])
+        self.add_module("l_weights", weights_compress[2])
+
+    def forward(self, x_h, x_m, x_l):
+        results = []
+        for i in range(3):
+            x_h_resized = self.res_h_convs[i](x_h)
+            x_m_resized = self.res_m_convs[i](x_m)
+            x_l_resized = self.res_l_convs[i](x_l)
+
+            x_h_weights = self.weights_h_convs[i](x_h_resized)
+            x_m_weights = self.weights_m_convs[i](x_m_resized)
+            x_l_weights = self.weights_l_convs[i](x_l_resized)
+
+            x_weights = torch.cat((x_h_weights, x_m_weights, x_l_weights),1)
+            x_weights = self.weights_compress[i](x_weights)
+            x_weights = F.softmax(x_weights, dim=1)
+
+            fused = x_h_resized * x_weights[:,0:1,:,:]+ x_m_resized * x_weights[:,1:2,:,:] + x_l_resized * x_weights[:,2:,:,:]
+            x_out = self.output_convs(fused)
+            results.append(x_out)
+
+        return results
+      
 class Yolov3FPG(nn.Module):
-    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False):
+    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, asff=False):
         """
         Args:
             in_channels (list[int]): number of channels in the input feature maps.
@@ -48,7 +218,10 @@ class Yolov3FPG(nn.Module):
             fuse_type (str): types for fusing the top down features and the lateral
                 ones. It can be "sum" (default), which sums up element-wise; or "avg",
                 which takes the element-wise mean of the two.
-            naive (bool): whether top feature is used to generate output feature in each stage.
+            naive (bool): a boolean value indicates whether 
+                top feature is used to generate output feature in each stage.
+            asff (bool): a boolean value indicates whether using 
+                adaptive spatial feature fusion in https://arxiv.org/abs/1911.09516.
         """
         super().__init__()
 
@@ -57,10 +230,16 @@ class Yolov3FPG(nn.Module):
         if top_block is None:
             assert len(out_features) == len(in_features), "Output feature and input feature should be consistent when top block is none."
         
+        norm="BN"
+        # whether use asff module
+        self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
+        if self.asff_enabled:
+            self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm=norm)
+        
         top_convs = []
         lateral_convs = []
         output_convs = []
-        norm="BN"
+        
 
         for idx, (in_channel, out_channel) in enumerate(zip(in_channels, out_channels)):
             top_out_channel = in_channel // 2
@@ -126,23 +305,28 @@ class Yolov3FPG(nn.Module):
             prev_features = lateral_features
 
             results.insert(0, output_conv(lateral_features))
-
         if self.top_block is not None:
             top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
             if top_block_in_feature is None:
                 top_block_in_feature = results[self.out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
+        if self.asff_enabled:
+            results[:4:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
 
 class RetinaFPG(nn.Module):
-    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False):
+    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, asff=False):
         super().__init__()
 
         assert len(in_features) == len(in_channels) and len(in_features) == len(in_strides) and len(in_features) > 0, "Info of input features should be valid and consistent."
         assert len(out_features) == len(out_channels) and len(out_channels) > 0, "Info of output features should be valid and consistent."
         if top_block is None:
             assert len(out_features) == len(in_features), "Output feature and input feature should be consistent when top block is none."
+        # whether use asff module
+        self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
+        if self.asff_enabled:
+            self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm="BN")
         
         lateral_convs = []
         output_convs = []
@@ -202,11 +386,12 @@ class RetinaFPG(nn.Module):
                 if self._fuse_type == "avg":
                     prev_features /= 2
             results.insert(0, output_conv(prev_features))
-
         if self.top_block is not None:
             top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
             if top_block_in_feature is None:
                 top_block_in_feature = results[self.out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
+        if self.asff_enabled:
+            results[:4:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
