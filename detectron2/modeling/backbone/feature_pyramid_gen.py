@@ -195,7 +195,7 @@ class ASFF(nn.Module):
         return results
       
 class Yolov3FPG(nn.Module):
-    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, asff=False):
+    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, panetff=False, asff=False):
         """
         Args:
             in_channels (list[int]): number of channels in the input feature maps.
@@ -220,6 +220,8 @@ class Yolov3FPG(nn.Module):
                 which takes the element-wise mean of the two.
             naive (bool): a boolean value indicates whether 
                 top feature is used to generate output feature in each stage.
+            panetff (bool): a boolean value indicates whether 
+                using feature fusion proposed in PANet(https://arxiv.org/abs/1803.01534).
             asff (bool): a boolean value indicates whether using 
                 adaptive spatial feature fusion in https://arxiv.org/abs/1911.09516.
         """
@@ -233,9 +235,11 @@ class Yolov3FPG(nn.Module):
         norm="BN"
         # whether use asff module
         self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
+        self.panetff_enabled = panetff
         if self.asff_enabled:
             self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm=norm)
-        
+        if self.panetff_enabled:
+            self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         top_convs = []
         lateral_convs = []
         output_convs = []
@@ -310,13 +314,15 @@ class Yolov3FPG(nn.Module):
             if top_block_in_feature is None:
                 top_block_in_feature = results[self.out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
+        if self.panetff_enabled:
+            results = self.panetff(results)
         if self.asff_enabled:
             results[:4:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
 
 class RetinaFPG(nn.Module):
-    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, asff=False):
+    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, panetff=False, asff=False):
         super().__init__()
 
         assert len(in_features) == len(in_channels) and len(in_features) == len(in_strides) and len(in_features) > 0, "Info of input features should be valid and consistent."
@@ -327,7 +333,8 @@ class RetinaFPG(nn.Module):
         self.asff_enabled = len(in_features) >= 3 and len(out_features) >= 3 and asff
         if self.asff_enabled:
             self.asff = ASFF(in_channels=out_channels[::3], out_channels=out_channels[::3], norm="BN")
-        
+        if self.panetff_enabled:
+            self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         lateral_convs = []
         output_convs = []
 
@@ -391,6 +398,8 @@ class RetinaFPG(nn.Module):
             if top_block_in_feature is None:
                 top_block_in_feature = results[self.out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
+        if self.panetff_enabled:
+            results = self.panetff(results)
         if self.asff_enabled:
             results[:4:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
