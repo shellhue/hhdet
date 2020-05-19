@@ -8,8 +8,6 @@ import math
 
 from detectron2.modeling.backbone.darknet import Conv2dBNLeakyReLU
 
-from .asff import ASFF
-
 from detectron2.layers import (
     Conv2d,
     FrozenBatchNorm2d,
