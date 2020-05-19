@@ -8,9 +8,7 @@ import math
 
 from detectron2.layers import (
     Conv2d,
-    FrozenBatchNorm2d,
     get_norm,
-    CNNBlockBase,
 )
 
 class ASFF(nn.Module):
@@ -29,14 +27,16 @@ class ASFF(nn.Module):
 
         self.in_channels = in_channels
         self.out_channels = out_channels
+
+        relu = nn.ReLU(inplace=True)
         
         self.res_l_convs = [
             nn.Sequential(
-                Conv2d(l_in_channel, h_in_channel, 1, 1),
+                Conv2d(l_in_channel, h_in_channel, kernel_size=1, norm=get_norm(norm, h_in_channel), activation=relu),
                 nn.UpsamplingNearest2d(scale_factor=4),
             ),
             nn.Sequential(
-                Conv2d(l_in_channel, m_in_channel, 1, 1),
+                Conv2d(l_in_channel, m_in_channel, kernel_size=1, norm=get_norm(norm, m_in_channel), activation=relu),
                 nn.UpsamplingNearest2d(scale_factor=2),
             ),
             nn.Identity(),
@@ -44,50 +44,51 @@ class ASFF(nn.Module):
 
         self.res_m_convs = [
             nn.Sequential(
-                Conv2d(m_in_channel, h_in_channel, 1, 1),
+                Conv2d(m_in_channel, h_in_channel, kernel_size=1, norm=get_norm(norm, h_in_channel), activation=relu),
                 nn.UpsamplingNearest2d(scale_factor=2),
             ),
             nn.Identity(),
-            Conv2d(m_in_channel, l_in_channel, 3, 2),
+            Conv2d(m_in_channel, l_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, l_in_channel), activation=relu),
         ]
 
         self.res_h_convs = [
             nn.Identity(),
-            Conv2d(h_in_channel, m_in_channel, 3, 2),
+            Conv2d(h_in_channel, m_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, m_in_channel), activation=relu),
             nn.Sequential(
                 nn.MaxPool2d(3, stride=2, padding=1),
-                Conv2d(h_in_channel, l_in_channel, 3, 2),
+                Conv2d(h_in_channel, l_in_channel, kernel_size=3, stride=2, padding=1, norm=get_norm(norm, l_in_channel), activation=relu),
             )
         ]
 
         self.output_convs = [
-            Conv2d(h_in_channel, h_out_channel, 3, 1),
-            Conv2d(m_in_channel, m_out_channel, 3, 1),
-            Conv2d(l_in_channel, l_out_channel, 3, 1),
+            Conv2d(h_in_channel, h_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, h_out_channel), activation=relu),
+            Conv2d(m_in_channel, m_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, m_out_channel), activation=relu),
+            Conv2d(l_in_channel, l_out_channel, kernel_size=3, padding=1, norm=get_norm(norm, l_out_channel), activation=relu),
         ]
 
         compress_c = 8
 
         self.weights_h_convs = [
-            Conv2d(h_in_channel, compress_c, 1, 1),
-            Conv2d(m_in_channel, compress_c, 1, 1),
-            Conv2d(l_in_channel, compress_c, 1, 1),
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
         ]
         self.weights_m_convs = [
-            Conv2d(h_in_channel, compress_c, 1, 1),
-            Conv2d(m_in_channel, compress_c, 1, 1),
-            Conv2d(l_in_channel, compress_c, 1, 1),
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
         ]
+
         self.weights_l_convs = [
-            Conv2d(h_in_channel, compress_c, 1, 1),
-            Conv2d(m_in_channel, compress_c, 1, 1),
-            Conv2d(l_in_channel, compress_c, 1, 1),
+            Conv2d(h_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(m_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
+            Conv2d(l_in_channel, compress_c, kernel_size=1, norm=get_norm(norm, compress_c), activation=relu),
         ]
 
         self.weights_compress = [
-            Conv2d(compress_c*3, 3, 1, 1),
-            Conv2d(compress_c*3, 3, 1, 1),
-            Conv2d(compress_c*3, 3, 1, 1),
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
+            Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0),
         ]
 
         self.add_module("h2h_resize", res_h_convs[0])
