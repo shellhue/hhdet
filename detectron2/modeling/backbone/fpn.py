@@ -11,7 +11,7 @@ from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 from .mobilenetv2 import build_mobilenetv2_backbone
 from .darknet import build_darknet53_backbone
-from .feature_pyramid_gen import Yolov3FPG, RetinaFPG
+from .feature_pyramid_gen import Yolov3FPG, RetinaFPG, BiFPG
 
 __all__ = [
     "build_resnet_fpn_backbone", 
@@ -166,7 +166,7 @@ class FPN_(Backbone):
     """
 
     def __init__(
-        self, bottom_up, in_strides, out_features, out_feature_strides, out_feature_channels, fpn_feature_gen):
+        self, bottom_up, in_strides, out_features, out_feature_strides, out_feature_channels, fpn_feature_gen, size_divisibility):
         """
         Args:
             bottom_up (Backbone): module representing the bottom up subnetwork.
@@ -198,7 +198,7 @@ class FPN_(Backbone):
         self._out_feature_strides = out_feature_strides
         self._out_features = out_features
         self._out_feature_channels = out_feature_channels
-        self._size_divisibility = in_strides[-1]
+        self._size_divisibility = size_divisibility
 
     @property
     def size_divisibility(self):
@@ -401,16 +401,22 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
     out_features = list(out_feature_strides.keys())
     out_feature_channels = {k: out_channels for k in out_features}
     out_channels = [out_channels] * len(out_features)
+    out_feature_strides_list = [out_feature_strides[f] for f in out_features]
 
-    fpn_feature_gen = Yolov3FPG(in_channels,
-                                out_channels,
-                                in_strides,
-                                in_features,
-                                out_features,
-                                top_block=top_block,
-                                norm=cfg.MODEL.FPN.NORM,
-                                fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
-                                naive=False)
+    # fpn_feature_gen = RetinaFPG(in_channels,
+    #                             out_channels,
+    #                             in_strides,
+    #                             in_features,
+    #                             out_features,
+    #                             top_block=top_block,
+    #                             norm=cfg.MODEL.FPN.NORM,
+    #                             fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    #                             naive=False,
+    #                             asff=True)
+    size_divisibility = out_feature_strides_list[-1]
+    fpn_feature_gen = BiFPG(in_features,
+                            in_channels,
+                            cfg.MODEL.FPN.OUT_CHANNELS)
     backbone = FPN_(
         bottom_up=bottom_up,
         in_strides=in_strides,
@@ -418,6 +424,7 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
         out_feature_strides=out_feature_strides,
         out_feature_channels=out_feature_channels,
         fpn_feature_gen=fpn_feature_gen,
+        size_divisibility=size_divisibility
     )
     return backbone
 
