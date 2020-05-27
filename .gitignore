@@ -59,3 +59,4 @@ ckpt_process.sh
 /projects/Yolov3_temp
 /projects/ultralytics_yolo
 /projects/ultralytics_yolo_tmp
+/projects/*_tmp

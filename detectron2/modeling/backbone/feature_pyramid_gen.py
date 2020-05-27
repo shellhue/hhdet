@@ -55,7 +55,7 @@ class PANetFF(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 weight_init.c2_xavier_fill(m)
-        
+
     def forward(self, x):
         assert len(x) == len(in_channels)
         results = [x[0]]
@@ -329,7 +329,7 @@ class BiFPNBlock(nn.Module):
         else:
             p3_out, p4_out, p5_out, p6_out, p7_out = self._forward(inputs)
 
-        return p3_out, p4_out, p5_out, p6_out, p7_out
+        return [p3_out, p4_out, p5_out, p6_out, p7_out]
 
     def _forward_fast_attention(self, inputs):
         if self.first_time:
@@ -403,7 +403,7 @@ class BiFPNBlock(nn.Module):
         # Connections for P7_0 and P6_2 to P7_2
         p7_out = self.conv7_down(self.activation(weight[0] * p7_in + weight[1] * self.p7_downsample(p6_out)))
 
-        return p3_out, p4_out, p5_out, p6_out, p7_out
+        return [p3_out, p4_out, p5_out, p6_out, p7_out]
 
     def _forward(self, inputs):
         if self.first_time:
@@ -453,13 +453,17 @@ class BiFPNBlock(nn.Module):
         # Connections for P7_0 and P6_2 to P7_2
         p7_out = self.conv7_down(self.activation(p7_in + self.p7_downsample(p6_out)))
 
-        return p3_out, p4_out, p5_out, p6_out, p7_out
+        return [p3_out, p4_out, p5_out, p6_out, p7_out]
 
 
 class BiFPG(nn.Module):
-    def __init__(self, in_features, in_channels, out_channels, attention=True, norm="BN"):
+    def __init__(self, in_features, in_channels, out_channels, attention=True, norm="BN", asff=False):
         super().__init__()
         self.in_features = in_features
+        self.asff_enabled = len(in_features) >= 3 and asff
+        assert self.asff_enabled
+        if self.asff_enabled:
+            self.asff = ASFF(in_channels=[out_channels]*3, out_channels=[out_channels]*3, norm=norm)
 
         self.bifpn1 = BiFPNBlock(out_channels, in_channels, first_time=True, epsilon=1e-4, attention=attention, norm=norm)
         self.bifpn2 = BiFPNBlock(out_channels, first_time=False, epsilon=1e-4, attention=attention, norm=norm)
@@ -470,6 +474,8 @@ class BiFPG(nn.Module):
         x = self.bifpn1(x)
         x = self.bifpn2(x)
         x = self.bifpn3(x)
+        if self.asff_enabled:
+            x[:3:] = self.asff(x[0], x[1], x[2])
         return x
 
 
