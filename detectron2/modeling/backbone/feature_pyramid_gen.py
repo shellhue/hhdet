@@ -50,20 +50,21 @@ class PANetFF(nn.Module):
             self.add_module("output_conv{}".format(i), o_conv)
             bottom_up_convs.append(bp_conv)
             output_convs.append(o_conv)
-        
+        self.bottom_up_convs = bottom_up_convs
+        self.output_convs = output_convs
         # weights init
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 weight_init.c2_xavier_fill(m)
 
     def forward(self, x):
-        assert len(x) == len(in_channels)
+        assert len(x) == len(self.in_channels)
         results = [x[0]]
         output_feature = x[0]
         for i in range(1, len(x)):
-            prev_features = bottom_up_convs[i-1](output_feature)
+            prev_features = self.bottom_up_convs[i-1](output_feature)
             fused = prev_features + x[i]
-            output_feature = output_convs[i-1](fused)
+            output_feature = self.output_convs[i-1](fused)
             results.append(output_feature)
         return results
 
@@ -524,7 +525,7 @@ class Yolov3FPG(nn.Module):
         if self.asff_enabled:
             self.asff = ASFF(in_channels=out_channels[:3:], out_channels=out_channels[:3:], norm=norm)
         if self.panetff_enabled:
-            self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
+            self.panetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         top_convs = []
         lateral_convs = []
         output_convs = []
@@ -620,7 +621,7 @@ class RetinaFPG(nn.Module):
             self.asff = ASFF(in_channels=out_channels[:3:], out_channels=out_channels[:3:], norm="BN")
         self.panetff_enabled = panetff
         if self.panetff_enabled:
-            self.pannetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
+            self.panetff = PANetFF(in_channels=out_channels, out_channels=out_channels, norm=norm)
         lateral_convs = []
         output_convs = []
 
