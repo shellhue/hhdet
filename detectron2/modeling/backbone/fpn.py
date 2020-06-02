@@ -276,6 +276,38 @@ class LastLevelP6P7(nn.Module):
         p7 = self.p7(F.relu(p6))
         return [p6, p7]
 
+class LastLevelC6C7(nn.Module):
+    """
+    This module is used in RetinaNet to generate extra layers, C6 and C7 from
+    C5 feature.
+    """
+
+    def __init__(self, in_channels, out_channels, in_feature="res5", num_levels=2):
+        super().__init__()
+        self.num_levels = num_levels
+        self.in_feature = in_feature
+        self.c6 = nn.Sequential(
+            Conv2d(in_channels, out_channels, 1),
+            nn.BatchNorm2d(out_channels, momentum=0.01, eps=1e-3),
+            nn.MaxPool2d(3, stride=2, padding=1)
+        )
+        if self.num_levels > 1:
+            self.c7 = nn.Sequential(
+                nn.MaxPool2d(3, stride=2, padding=1)
+            )
+
+        # weights init
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                weight_init.c2_xavier_fill(m)
+
+    def forward(self, c5):
+        c6 = self.c6(c5)
+        if self.num_levels == 1:
+            return [c6]
+        c7 = self.c7(F.relu(c6))
+        return [c6, c7]
+
 
 @BACKBONE_REGISTRY.register()
 def build_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
@@ -297,6 +329,61 @@ def build_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
         top_block=LastLevelMaxPool(),
         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
+    return backbone
+
+@BACKBONE_REGISTRY.register()
+def build_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = build_resnet_backbone(cfg, input_shape)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    in_channels_p6p7 = bottom_up.output_shape()["res5"].channels
+
+    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS, num_levels=1)
+
+    input_shapes = bottom_up.output_shape()
+    in_strides = [input_shapes[f].stride for f in in_features]
+    in_channels = [input_shapes[f].channels for f in in_features]
+
+    _assert_strides_are_log2_contiguous(in_strides)
+
+    # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
+    out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
+    # top block output feature maps.
+    stage = 0
+    for s in in_strides:
+        stage = max(stage, int(math.log2(s)))
+    if top_block is not None:
+        for s in range(stage, stage + top_block.num_levels):
+            out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+    out_features = list(out_feature_strides.keys())
+    out_feature_channels = {k: out_channels for k in out_features}
+    out_channels = [out_channels] * len(out_features)
+    out_feature_strides_list = [out_feature_strides[f] for f in out_features]
+    
+    fpn_feature_gen = BiFPG(in_features,
+                            in_channels,
+                            cfg.MODEL.FPN.OUT_CHANNELS,
+                            top_block=top_block)
+
+    size_divisibility = out_feature_strides_list[-1]
+
+    backbone = FPN_(
+        bottom_up=bottom_up,
+        in_strides=in_strides,
+        out_features=out_features,
+        out_feature_strides=out_feature_strides,
+        out_feature_channels=out_feature_channels,
+        fpn_feature_gen=fpn_feature_gen,
+        size_divisibility=size_divisibility
+    )
+
     return backbone
 
 @BACKBONE_REGISTRY.register()
@@ -412,11 +499,17 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
     #                             norm=cfg.MODEL.FPN.NORM,
     #                             fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     #                             naive=False,
-    #                             asff=True)
-    size_divisibility = out_feature_strides_list[-1]
+    #                             panetff=True,
+    #                             asff=False)
+    
+    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS)
     fpn_feature_gen = BiFPG(in_features,
                             in_channels,
-                            cfg.MODEL.FPN.OUT_CHANNELS)
+                            cfg.MODEL.FPN.OUT_CHANNELS,
+                            top_block=top_block)
+
+    size_divisibility = out_feature_strides_list[-1]
+
     backbone = FPN_(
         bottom_up=bottom_up,
         in_strides=in_strides,

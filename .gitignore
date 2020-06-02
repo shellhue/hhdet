@@ -56,7 +56,7 @@ ckpt_process.sh
 
 # ignore backbone projects which is just used to investigate backbone temporarily.
 /projects/Backbone
-/projects/Yolov3_temp
 /projects/ultralytics_yolo
-/projects/ultralytics_yolo_tmp
 /projects/*_tmp
+/projects/*_temp
+

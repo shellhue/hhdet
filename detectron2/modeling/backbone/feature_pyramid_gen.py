@@ -25,6 +25,7 @@ __all__ = [
     "BiFPG"
     ]
 
+
 class PANetFF(nn.Module):
     """
     Feature fusion from bottom up direction used in PANet(https://arxiv.org/abs/1803.01534)
@@ -67,6 +68,7 @@ class PANetFF(nn.Module):
             output_feature = self.output_convs[i-1](fused)
             results.append(output_feature)
         return results
+
 
 class ASFF(nn.Module):
     """
@@ -204,6 +206,7 @@ class ASFF(nn.Module):
 
         return results
 
+
 class BiFPNBlock(nn.Module):
     def __init__(self, num_channels, conv_channels=None, first_time=False, epsilon=1e-4, attention=True, norm="BN"):
         """
@@ -244,6 +247,11 @@ class BiFPNBlock(nn.Module):
 
         self.first_time = first_time
         if self.first_time:
+            if len(conv_channels) > 3 and conv_channels[3] != num_channels:
+                self.p6_down_channel = nn.Sequential(
+                    Conv2d(conv_channels[3], num_channels, 1),
+                    nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
+                )
             self.p5_down_channel = nn.Sequential(
                 Conv2d(conv_channels[2], num_channels, 1),
                 nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
@@ -257,14 +265,15 @@ class BiFPNBlock(nn.Module):
                 nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
             )
 
-            self.p5_to_p6 = nn.Sequential(
-                Conv2d(conv_channels[2], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-                nn.MaxPool2d(3, stride=2, padding=1)
-            )
-            self.p6_to_p7 = nn.Sequential(
-                nn.MaxPool2d(3, stride=2, padding=1)
-            )
+
+            # self.p5_to_p6 = nn.Sequential(
+            #     Conv2d(conv_channels[2], num_channels, 1),
+            #     nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
+            #     nn.MaxPool2d(3, stride=2, padding=1)
+            # )
+            # self.p6_to_p7 = nn.Sequential(
+            #     nn.MaxPool2d(3, stride=2, padding=1)
+            # )
 
             self.p4_down_channel_2 = nn.Sequential(
                 Conv2d(conv_channels[1], num_channels, 1),
@@ -274,6 +283,12 @@ class BiFPNBlock(nn.Module):
                 Conv2d(conv_channels[2], num_channels, 1),
                 nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
             )
+
+            if len(conv_channels) > 3 and conv_channels[3] != num_channels:
+                self.p6_down_channel_2 = nn.Sequential(
+                    Conv2d(conv_channels[3], num_channels, 1),
+                    nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
+                )
 
         # Weight
         self.p6_w1 = nn.Parameter(torch.ones(2, dtype=torch.float32), requires_grad=True)
@@ -334,19 +349,19 @@ class BiFPNBlock(nn.Module):
 
     def _forward_fast_attention(self, inputs):
         if self.first_time:
-            p3, p4, p5 = inputs
-
-            p6_in = self.p5_to_p6(p5)
-            p7_in = self.p6_to_p7(p6_in)
+            p3, p4, p5, p6, p7 = inputs
 
             p3_in = self.p3_down_channel(p3)
             p4_in = self.p4_down_channel(p4)
             p5_in = self.p5_down_channel(p5)
+            p7_in = p7
+            p6_in = p6
+            if hasattr(self, 'p6_down_channel'):
+                p6_in = self.p6_down_channel(p6)
 
         else:
             # P3_0, P4_0, P5_0, P6_0 and P7_0
             p3_in, p4_in, p5_in, p6_in, p7_in = inputs
-
         # P7_0 to P7_2
 
         # Weights for P6_0 and P7_0 to P6_1
@@ -376,6 +391,8 @@ class BiFPNBlock(nn.Module):
         if self.first_time:
             p4_in = self.p4_down_channel_2(p4)
             p5_in = self.p5_down_channel_2(p5)
+            if hasattr(self, 'p6_down_channel_2'):
+                p6_in = self.p6_down_channel_2(p6)
 
         # Weights for P4_0, P4_1 and P3_2 to P4_2
         p4_w2 = self.p4_w2_relu(self.p4_w2)
@@ -408,14 +425,15 @@ class BiFPNBlock(nn.Module):
 
     def _forward(self, inputs):
         if self.first_time:
-            p3, p4, p5 = inputs
-
-            p6_in = self.p5_to_p6(p5)
-            p7_in = self.p6_to_p7(p6_in)
-
+            p3, p4, p5, p6, p7 = inputs
+            
             p3_in = self.p3_down_channel(p3)
             p4_in = self.p4_down_channel(p4)
             p5_in = self.p5_down_channel(p5)
+            p7_in = p7
+            p6_in = p6
+            if hasattr(self, 'p6_down_channel'):
+                p6_in = self.p6_down_channel(p6)
 
         else:
             # P3_0, P4_0, P5_0, P6_0 and P7_0
@@ -438,6 +456,8 @@ class BiFPNBlock(nn.Module):
         if self.first_time:
             p4_in = self.p4_down_channel_2(p4)
             p5_in = self.p5_down_channel_2(p5)
+            if hasattr(self, 'p6_down_channel_2'):
+                p6_in = self.p6_down_channel_2(p6)
 
         # Connections for P4_0, P4_1 and P3_2 to P4_2 respectively
         p4_out = self.conv4_down(
@@ -458,11 +478,11 @@ class BiFPNBlock(nn.Module):
 
 
 class BiFPG(nn.Module):
-    def __init__(self, in_features, in_channels, out_channels, attention=True, norm="BN", asff=False):
+    def __init__(self, in_features, in_channels, out_channels, attention=True, norm="BN", asff=False, top_block=None):
         super().__init__()
         self.in_features = in_features
+        self.top_block = top_block
         self.asff_enabled = len(in_features) >= 3 and asff
-        assert self.asff_enabled
         if self.asff_enabled:
             self.asff = ASFF(in_channels=[out_channels]*3, out_channels=[out_channels]*3, norm=norm)
 
@@ -471,7 +491,12 @@ class BiFPG(nn.Module):
         self.bifpn3 = BiFPNBlock(out_channels, first_time=False, epsilon=1e-4, attention=attention, norm=norm)
     
     def forward(self, x):
+        bottom_up_features = x
         x = [x[f] for f in self.in_features]
+
+        if self.top_block is not None:
+            top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
+            x.extend(self.top_block(top_block_in_feature))
         x = self.bifpn1(x)
         x = self.bifpn2(x)
         x = self.bifpn3(x)
@@ -606,6 +631,7 @@ class Yolov3FPG(nn.Module):
             results[:3:] = self.asff(results[0], results[1], results[2])
         assert len(self.out_features) == len(results)
         return results
+
 
 class RetinaFPG(nn.Module):
     def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum", naive=False, panetff=False, asff=False):
