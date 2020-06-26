@@ -6,6 +6,11 @@ import fvcore.nn.weight_init as weight_init
 import logging 
 import math
 
+from detectron2.modeling.backbone.transformer import (
+    PositionEmbeddingSine,
+    Transformer,
+)
+
 from detectron2.modeling.backbone.darknet import Conv2dBNLeakyReLU
 
 from detectron2.layers import (
@@ -715,5 +720,99 @@ class RetinaFPG(nn.Module):
             results = self.panetff(results)
         if self.asff_enabled:
             results[:3:] = self.asff(results[0], results[1], results[2])
+        assert len(self.out_features) == len(results)
+        return results
+
+class TransformerFPG(nn.Module):
+    def __init__(self, in_channels, out_channels, in_strides, in_features=["s3", "s4", "s5"], out_features=["p3", "p4", "p5"], top_block=None, norm="BN", fuse_type="sum"):
+        super().__init__()
+
+        assert len(in_features) == len(in_channels) and len(in_features) == len(in_strides) and len(in_features) > 0, "Info of input features should be valid and consistent."
+        assert len(out_features) == len(out_channels) and len(out_channels) > 0, "Info of output features should be valid and consistent."
+        if top_block is None:
+            assert len(out_features) == len(in_features), "Output feature and input feature should be consistent when top block is none."
+        lateral_convs = []
+        output_convs = []
+
+        use_bias = norm == ""
+        for idx, in_channel in enumerate(in_channels):
+            out_channel = out_channels[idx]
+            lateral_norm = get_norm(norm, out_channel)
+            output_norm = get_norm(norm, out_channel)
+
+            lateral_conv = Conv2d(
+                in_channel, out_channel, kernel_size=1, bias=use_bias, norm=lateral_norm
+            )
+            output_conv = Conv2d(
+                out_channel,
+                out_channel,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=use_bias,
+                norm=output_norm,
+            )
+            weight_init.c2_xavier_fill(lateral_conv)
+            weight_init.c2_xavier_fill(output_conv)
+            stage = int(math.log2(in_strides[idx]))
+            self.add_module("fpn_lateral{}".format(stage), lateral_conv)
+            self.add_module("fpn_output{}".format(stage), output_conv)
+
+            lateral_convs.append(lateral_conv)
+            output_convs.append(output_conv)
+        # Place convs into top-down order (from low to high resolution)
+        # to make the top-down computation in forward clearer.
+        self.lateral_convs = lateral_convs[::-1]
+        self.output_convs = output_convs[::-1]
+        self.top_block = top_block
+        self.in_features = in_features
+        self.out_features = out_features
+        self.transformer = Transformer(
+                                    d_model=256,
+                                    nhead=8,
+                                    num_encoder_layers=6,
+                                    dim_feedforward=2048,
+                                    dropout=0.1,
+                                    activation="relu",
+                                    normalize_before=False,
+                                    return_intermediate_dec=False)
+        self.pos_embedding = PositionEmbeddingSine(128, normalize=True)
+        assert fuse_type in {"avg", "sum"}
+        self._fuse_type = fuse_type
+
+    def forward(self, bottom_up_features):
+        x = [bottom_up_features[f] for f in self.in_features[::-1]]
+        results = []
+
+        projected_features = []
+        
+        for features, lateral_conv in zip(
+            x[0:], self.lateral_convs[0:]):
+            f = lateral_conv(features)
+            projected_features.insert(0, f)
+        if self.top_block is not None:
+            top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
+            projected_features.extend(self.top_block(top_block_in_feature))
+        masks = [torch.zeros_like(f[:,0,:,:]).bool() for f in projected_features]
+        pos_embedding = []
+        for f, m in zip(projected_features, masks):
+            pos_embedding.append(self.pos_embedding(f, m))
+        pos_embedding_r = [p.view(p.size()[0], p.size()[1], -1) for p in pos_embedding]
+        pos_embedding_r = torch.cat(pos_embedding_r, dim=2).permute(2, 0, 1)
+        projected_features_r = [p.view(p.size()[0], p.size()[1], -1) for p in projected_features]
+        projected_features_r = torch.cat(projected_features_r, dim=2).permute(2, 0, 1)
+        output = self.transformer(projected_features_r, pos_embedding_r)
+
+        output = output.permute(1, 2, 0)
+        for f in projected_features:
+            slices.append(offsets[-1]+f.size()[2]*f.size()[3])
+            hw.append((f.size()[2], f.size()[3]))
+        offset = 0
+        for f in projected_features:
+            b, _, h , w = f.size()
+            o = output[:,:,offset:(offset+h*w)].view(b, -1, h, w)
+            results.append(o)
+            offsets += h*w
+
         assert len(self.out_features) == len(results)
         return results
