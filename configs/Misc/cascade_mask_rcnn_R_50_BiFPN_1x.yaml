@@ -2,8 +2,6 @@ _BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
-  BACKBONE:
-    NAME: "build_resnet_bifpn_backbone"
   RESNETS:
     DEPTH: 50
   ROI_HEADS:
@@ -12,6 +10,8 @@ MODEL:
     CLS_AGNOSTIC_BBOX_REG: True
   RPN:
     POST_NMS_TOPK_TRAIN: 2000
+  BACKBONE:
+    NAME: "build_resnet_bifpn_backbone"
 SOLVER:
   IMS_PER_BATCH: 8
   BASE_LR: 0.01

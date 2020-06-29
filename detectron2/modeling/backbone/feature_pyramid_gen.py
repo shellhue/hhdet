@@ -253,6 +253,7 @@ class BiFPNBlock(nn.Module):
         self.first_time = first_time
         if self.first_time:
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
+                assert False
                 self.p6_down_channel = nn.Sequential(
                     Conv2d(conv_channels[3], num_channels, 1),
                     nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
@@ -290,6 +291,7 @@ class BiFPNBlock(nn.Module):
             )
 
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
+                assert False
                 self.p6_down_channel_2 = nn.Sequential(
                     Conv2d(conv_channels[3], num_channels, 1),
                     nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
@@ -344,7 +346,6 @@ class BiFPNBlock(nn.Module):
         # if same, pass;
         # elif earlier phase, downsample to target phase's by pooling
         # elif later phase, upsample to target phase's by nearest interpolation
-
         if self.attention:
             p3_out, p4_out, p5_out, p6_out, p7_out = self._forward_fast_attention(inputs)
         else:
@@ -359,10 +360,10 @@ class BiFPNBlock(nn.Module):
             p3_in = self.p3_down_channel(p3)
             p4_in = self.p4_down_channel(p4)
             p5_in = self.p5_down_channel(p5)
-            p7_in = p7
             p6_in = p6
             if hasattr(self, 'p6_down_channel'):
                 p6_in = self.p6_down_channel(p6)
+            p7_in = p7
 
         else:
             # P3_0, P4_0, P5_0, P6_0 and P7_0

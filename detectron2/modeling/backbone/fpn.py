@@ -305,7 +305,7 @@ class LastLevelC6C7(nn.Module):
         c6 = self.c6(c5)
         if self.num_levels == 1:
             return [c6]
-        c7 = self.c7(F.relu(c6))
+        c7 = self.c7(c6)
         return [c6, c7]
 
 
