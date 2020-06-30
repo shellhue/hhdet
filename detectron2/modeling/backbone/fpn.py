@@ -282,13 +282,12 @@ class LastLevelC6C7(nn.Module):
     C5 feature.
     """
 
-    def __init__(self, in_channels, out_channels, in_feature="res5", num_levels=2):
+    def __init__(self, in_channels, out_channels, in_feature="res5", num_levels=2, norm="BN"):
         super().__init__()
         self.num_levels = num_levels
         self.in_feature = in_feature
         self.c6 = nn.Sequential(
-            Conv2d(in_channels, out_channels, 1),
-            nn.BatchNorm2d(out_channels, momentum=0.01, eps=1e-3),
+            Conv2d(in_channels, out_channels, 1, norm=get_norm(norm, out_channels)),
             nn.MaxPool2d(3, stride=2, padding=1)
         )
         if self.num_levels > 1:
@@ -345,7 +344,7 @@ def build_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     in_channels_p6p7 = bottom_up.output_shape()["res5"].channels
 
-    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS, num_levels=1)
+    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS, num_levels=1, norm="SyncBN")
 
     input_shapes = bottom_up.output_shape()
     in_strides = [input_shapes[f].stride for f in in_features]
@@ -370,7 +369,8 @@ def build_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
     fpn_feature_gen = BiFPG(in_features,
                             in_channels,
                             cfg.MODEL.FPN.OUT_CHANNELS,
-                            top_block=top_block)
+                            top_block=top_block,
+                            norm="SyncBN")
 
     size_divisibility = out_feature_strides_list[-1]
 
@@ -502,11 +502,12 @@ def build_retinanet_resnet_fpn_backbone_test(cfg, input_shape: ShapeSpec):
     #                             panetff=True,
     #                             asff=False)
     
-    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS)
+    top_block = LastLevelC6C7(in_channels_p6p7, cfg.MODEL.FPN.OUT_CHANNELS, norm="SyncBN")
     fpn_feature_gen = BiFPG(in_features,
                             in_channels,
                             cfg.MODEL.FPN.OUT_CHANNELS,
-                            top_block=top_block)
+                            top_block=top_block,
+                            norm="SyncBN")
 
     size_divisibility = out_feature_strides_list[-1]
 

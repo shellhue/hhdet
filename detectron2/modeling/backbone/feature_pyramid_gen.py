@@ -254,22 +254,11 @@ class BiFPNBlock(nn.Module):
         if self.first_time:
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
                 assert False
-                self.p6_down_channel = nn.Sequential(
-                    Conv2d(conv_channels[3], num_channels, 1),
-                    nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-                )
-            self.p5_down_channel = nn.Sequential(
-                Conv2d(conv_channels[2], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            )
-            self.p4_down_channel = nn.Sequential(
-                Conv2d(conv_channels[1], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            )
-            self.p3_down_channel = nn.Sequential(
-                Conv2d(conv_channels[0], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            )
+                self.p6_down_channel = Conv2d(conv_channels[3], num_channels, 1, norm=get_norm(norm, num_channels))
+
+            self.p5_down_channel = Conv2d(conv_channels[2], num_channels, 1, norm=get_norm(norm, num_channels))
+            self.p4_down_channel = Conv2d(conv_channels[1], num_channels, 1, norm=get_norm(norm, num_channels))
+            self.p3_down_channel = Conv2d(conv_channels[0], num_channels, 1, norm=get_norm(norm, num_channels))
 
 
             # self.p5_to_p6 = nn.Sequential(
@@ -281,21 +270,12 @@ class BiFPNBlock(nn.Module):
             #     nn.MaxPool2d(3, stride=2, padding=1)
             # )
 
-            self.p4_down_channel_2 = nn.Sequential(
-                Conv2d(conv_channels[1], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            )
-            self.p5_down_channel_2 = nn.Sequential(
-                Conv2d(conv_channels[2], num_channels, 1),
-                nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            )
+            self.p4_down_channel_2 = Conv2d(conv_channels[1], num_channels, 1, norm=get_norm(norm, num_channels))
+            self.p5_down_channel_2 = Conv2d(conv_channels[2], num_channels, 1, norm=get_norm(norm, num_channels))
 
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
                 assert False
-                self.p6_down_channel_2 = nn.Sequential(
-                    Conv2d(conv_channels[3], num_channels, 1),
-                    nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-                )
+                self.p6_down_channel_2 = Conv2d(conv_channels[3], num_channels, 1, norm=get_norm(norm, num_channels))
 
         # Weight
         self.p6_w1 = nn.Parameter(torch.ones(2, dtype=torch.float32), requires_grad=True)
