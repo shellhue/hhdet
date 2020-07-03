@@ -253,28 +253,16 @@ class BiFPNBlock(nn.Module):
         self.first_time = first_time
         if self.first_time:
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
-                assert False
                 self.p6_down_channel = Conv2d(conv_channels[3], num_channels, 1, norm=get_norm(norm, num_channels))
 
             self.p5_down_channel = Conv2d(conv_channels[2], num_channels, 1, norm=get_norm(norm, num_channels))
             self.p4_down_channel = Conv2d(conv_channels[1], num_channels, 1, norm=get_norm(norm, num_channels))
             self.p3_down_channel = Conv2d(conv_channels[0], num_channels, 1, norm=get_norm(norm, num_channels))
 
-
-            # self.p5_to_p6 = nn.Sequential(
-            #     Conv2d(conv_channels[2], num_channels, 1),
-            #     nn.BatchNorm2d(num_channels, momentum=0.01, eps=1e-3),
-            #     nn.MaxPool2d(3, stride=2, padding=1)
-            # )
-            # self.p6_to_p7 = nn.Sequential(
-            #     nn.MaxPool2d(3, stride=2, padding=1)
-            # )
-
             self.p4_down_channel_2 = Conv2d(conv_channels[1], num_channels, 1, norm=get_norm(norm, num_channels))
             self.p5_down_channel_2 = Conv2d(conv_channels[2], num_channels, 1, norm=get_norm(norm, num_channels))
 
             if len(conv_channels) > 3 and conv_channels[3] != num_channels:
-                assert False
                 self.p6_down_channel_2 = Conv2d(conv_channels[3], num_channels, 1, norm=get_norm(norm, num_channels))
 
         # Weight
